@@ -95,4 +95,81 @@ const registerUser = asyncHandler(async(req,res) =>{
 
 });
 
-export { registerUser }
+const loginUser = asyncHandler(async(req,res) => {
+  // 1. get the user's credential from the req.body
+  // 2. check the username or email is empty or not
+  // 3. find the user
+  // 4. check the password
+  // 5. access the access and refresh token
+  // 6. send the cookies
+  // 7. send the response all above operation is success
+
+  //check if there is any error in the request by experss validator
+    const errors = validationResult(req);
+    if(!errors.isEmpty()){
+        return new ApiError(400, "All fields are required");
+    }
+
+    // 1. get the user's credential from the req.body
+    const {username,email, password} = req.body;  
+
+    // 2. check the username or email is empty or not
+    if( [username,email,password].some((field)=> {field.trim() === ""})){
+        throw new ApiError(400, "All fields are required");
+    }
+
+    // 3. find the user
+    // If you want to retrieve the password field even though it's marked as select: false, you can explicitly include it in your query:
+    const existedUser = await User.findOne({
+        $or: [{username}, {email}]
+    }).select("+password"); 
+
+    if(!existedUser){
+        throw new ApiError(401, "invalid email or password");
+    }
+
+    // 4. check the password
+    console.log(password);
+    const isPasswordValid = await existedUser.isPasswordCorrect(password);
+
+     if(!isPasswordValid){
+        throw new ApiError(401, "Invalid credentials"); 
+     }   
+
+    // 5. access the access and refresh token
+    const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(existedUser._id);
+  
+     // 6. remove password and refreshToken from the userdata
+  const loggedInUser = await User.findById(User._id).select(
+    "+password +refreshToken"
+  );
+
+
+    // 7. send the cookies
+    const options = {
+        httpOnly: true, // Prevent access from JavaScript (XSS protection)
+        secure: true, // Ensures the cookie is sent only over HTTPS
+      };
+
+
+     //8. send the response
+  return res
+  .status(200)
+  .cookie("accessToken", accessToken, options)
+  .cookie("refreshToken", refreshToken, options)
+  .json(
+    new ApiResponse(
+      200,
+      {
+        user: loggedInUser,
+        accessToken,
+        refreshToken,
+      },
+      "user logged in Successfully"
+    )
+  );
+    
+});
+
+
+export { registerUser , loginUser }

@@ -52,6 +52,9 @@ userSchema.pre("save",async function(next){
 })
 
 userSchema.methods.isPasswordCorrect = async function(password){
+  if (!this.password) {
+    throw new Error('No password found for this user');
+  }
     return await bcrypt.compare(password,this.password);
 }
 
