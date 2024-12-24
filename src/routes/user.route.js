@@ -1,5 +1,5 @@
 import { verifyJWT } from "../middlewares/auth.middleware.js";
-import { registerUser , loginUser } from "../controllers/user.controller.js"
+import { registerUser , loginUser, logoutUser , getUserProfile } from "../controllers/user.controller.js"
 import { body } from "express-validator";
 import { Router }  from "express";
 
@@ -18,6 +18,10 @@ router.route('/login',[
     body('password').isLength({min: 6}).withMessage('Password should be at least 6 character long'),  
 ]
 ).post(loginUser);
+
+router.route('/logout').get(verifyJWT, logoutUser);
+
+router.route('/profile').get(verifyJWT, getUserProfile);
 
 
 

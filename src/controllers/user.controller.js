@@ -4,6 +4,7 @@ import { User} from "../models/user.model.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
+
 import { validationResult } from "express-validator";
 
 
@@ -138,11 +139,13 @@ const loginUser = asyncHandler(async(req,res) => {
 
     // 5. access the access and refresh token
     const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(existedUser._id);
+    console.log(accessToken , refreshToken);
   
      // 6. remove password and refreshToken from the userdata
   const loggedInUser = await User.findById(User._id).select(
-    "+password +refreshToken"
+    "-password -refreshToken"
   );
+
 
 
     // 7. send the cookies
@@ -154,10 +157,10 @@ const loginUser = asyncHandler(async(req,res) => {
 
      //8. send the response
   return res
-  .status(200)
-  .cookie("accessToken", accessToken, options)
-  .cookie("refreshToken", refreshToken, options)
-  .json(
+   .status(200)
+   .cookie("accessToken", accessToken, options)
+   .cookie("refreshToken", refreshToken, options)
+   .json(
     new ApiResponse(
       200,
       {
@@ -172,4 +175,37 @@ const loginUser = asyncHandler(async(req,res) => {
 });
 
 
-export { registerUser , loginUser }
+const logoutUser = asyncHandler(async (req, res) => {
+    await User.findByIdAndUpdate(
+      req.user._id,
+      {
+        $Unset: {
+          refreshToken: 1,
+        },
+      },
+      {
+        new: true,
+      }
+    );
+  
+   
+    const options = {
+      httpOnly: true,
+      secure: true,
+    };
+  
+    return res
+      .status(200)
+      .clearCookie("accessToken", options)
+      .clearCookie("refreshToken", options)
+      .json(new ApiResponse(200, {}, "user Logged out successfully"));
+  });
+
+const getUserProfile = asyncHandler(async(req,res) => { 
+    return res
+    .status(200)
+    .json(new ApiResponse(200, req.user, "current user fetced successfully"));
+});
+
+
+export { registerUser , loginUser ,logoutUser, getUserProfile };        
