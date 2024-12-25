@@ -3,8 +3,6 @@ import { ApiError } from "../utils/ApiError.js";
 import { User} from "../models/user.model.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
-import mongoose from "mongoose";
-
 import { validationResult } from "express-validator";
 
 
@@ -174,7 +172,6 @@ const loginUser = asyncHandler(async(req,res) => {
     
 });
 
-
 const logoutUser = asyncHandler(async (req, res) => {
     await User.findByIdAndUpdate(
       req.user._id,
@@ -207,5 +204,107 @@ const getUserProfile = asyncHandler(async(req,res) => {
     .json(new ApiResponse(200, req.user, "current user fetced successfully"));
 });
 
+const refreshAccessToken = asyncHandler(async (req, res) => {
+  const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken; // this is the token of user's cookies
 
-export { registerUser , loginUser ,logoutUser, getUserProfile };        
+  if (!incomingRefreshToken) {
+    throw new ApiError(401, "unauthorized request");
+  }
+
+  try {
+    const decodedToken = jwt.verify(
+      incomingRefreshToken,
+      process.env.ReFRESH_TOKEN_SECRET
+    );
+
+    const user = await User.findById(decodedToken?._id);
+
+    if (!user) {
+      throw new ApiError(401, "Invalid refresh token");
+    }
+
+    if (incomingRefreshToken !== user?.refreshToken) {
+      throw new ApiError(401, "refresh token is expired or used");
+    }
+
+    const options = {
+      httpOnly: true,
+      secure: true,
+    };
+
+    const { accessToken, newRefreshToken } =
+      await generateAccessAndRefreshTokens(user._id);
+
+    return res
+      .status(200)
+      .cookie("accessToken", accessToken, options)
+      .cookie("refreshToken", newRefreshToken, options)
+      .json(
+        new ApiResponse(
+          200,
+          { accessToken, refreshToken: newRefreshToken },
+          "Access Token refreshed"
+        )
+      );
+  } catch (error) {
+    if (error) {
+      throw new ApiError(401, error?.message || "Invalid refresh Token");
+    }
+  }
+});
+
+const changeCurrentPassword = asyncHandler(async (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+
+  const user = await User.findById(req.user?._id); // req.user taken from authmiddleware line no 25
+
+  const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
+
+  if (!isPasswordCorrect) {
+    throw new ApiError(400, "Invalid old password");
+  }
+
+  user.password = newPassword;
+  await user.save({ validateBeforeSave: false });
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Password changed successfully"));
+});
+
+const updateAccountDetails = asyncHandler(async (req, res) => {
+  const { fullName, email } = req.body;
+
+  // Check for missing fields
+  if (!fullName || !email) {
+    throw new ApiError(400, "All fields are required");
+  }
+
+  // Typically, when a user is authenticated, middleware (like verifyJWT) decodes the JWT and attaches the authenticated user’s details (including the user ID) to the req.user object.
+  // Get user ID from req.user (if it's the authenticated user)
+  const userId = req.user._id;
+
+  //here req.body._id is making the client/user to send his/her id so this is not good pracrtise cuz this will allow the user to update other account
+
+  // Find and update the user by their ID
+  const user = await User.findByIdAndUpdate(
+    userId,
+    {
+      $set: {
+        fullName,
+        email,
+      },
+    },
+    { new: true } // Return the updated user
+  ).select("-password"); // Exclude password field
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, user, "Account details updated successfully"));
+});
+
+export { registerUser , loginUser ,logoutUser, getUserProfile, refreshAccessToken, changeCurrentPassword, updateAccountDetails };        

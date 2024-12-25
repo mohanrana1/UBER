@@ -22,10 +22,11 @@ app.use(cookieParser());
 
 // routes import
 import UserRouer from './routes/user.route.js'
-
+import CaptainRouter from './routes/captain.route.js'
 
 // routes declaration
 app.use("/api/v1/users", UserRouer);
+app.use("/api/v1/captains", CaptainRouter);
 
 
 
