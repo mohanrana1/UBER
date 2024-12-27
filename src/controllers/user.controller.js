@@ -205,6 +205,7 @@ const getUserProfile = asyncHandler(async(req,res) => {
 });
 
 const refreshAccessToken = asyncHandler(async (req, res) => {
+  console.log(req.user);
   const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken; // this is the token of user's cookies
 
   if (!incomingRefreshToken) {

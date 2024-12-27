@@ -2,9 +2,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 import { Captain } from '../models/captain.model.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
-import jwt from 'jsonwebtoken';
 import { validationResult } from "express-validator";
-
 
 
 const generateAccessAndRefreshTokens =  async (captainId) => {
@@ -32,68 +30,176 @@ const generateAccessAndRefreshTokens =  async (captainId) => {
     }
 }
 
-const registerCaptain = asyncHandler(async(req,res) => {
-    // step to register user
-  // 1. get user details from frontend ✅
-  // 2. validation of data like not empty ✅
-  // 3. check if user already exists (check either by username or email) ✅
-  // 4. create user object - create entry in db ✅
-  // 5. remove user password and refresh token field from response ✅
-  // 6. check for user creation ✅
-  // 7. return response ✅
-
-  //get the result of validation from express-validator
-      
-
-
-  // 1. get user details from frontend ✅
-    const { fullName , email, username, password, color, plate, capacity, vechileType } = req.body;
-
-// 2. validation of data like not empty ✅
- const  errors = validationResult(req);
+const registerCaptain = asyncHandler(async (req, res) => {
+    console.log("Register Captain - Start");
   
- if(!errors.isEmpty()){
-     return new ApiError(400, "All fields are required")
- }
-
-    // 3. check if Captain already exists (check either by username or email) ✅
-        const existedUser = await Captain.findOne({
-            $or : [{username} , {email}] ,
-        });
-
-        if(!existedUser){
-            throw new ApiError(409, "User with email or username already exist")
-        }
-
-    // 4. create user object - create entry in db ✅
-    const newCaptain = await Captain.create({
-        fullName: {
-            firstname,
-            lastname
-        },
-        email,
-        password,
-        username,
-        vechile: {
-            color,
-            plate,
-            capacity,
-            vechileType
-        }
-    })
-
-      // 5. remove user password and refresh token field from response ✅
-        const createdCaptain = await Captain.findById(newCaptain._id).select("-password -refreshToken")
-
-        if(!createdCaptain){
-            throw new ApiError(500, "Something went wrong while registering the user")
-        }
-
-        // 6. return response
-        return res
-        .status(201)
-        .json(new ApiResponse(200, createdCaptain, "User registered successfully"));
+    // Validate request body using express-validator
+    console.log("Validating request body");
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      console.log("Validation errors:", errors.array());
+      return res.status(400).json({ errors: errors.array() });
+    }
+  
+    // Extract data from request body
+    const { fullname, email, username, password, vechile } = req.body;
+    const { firstname, lastname } = fullname || {};
+    const { color, plate, capacity, vechileType } = vechile || {};
+  
+    // Validate fields
+    if (
+      [firstname, username, email, password, color, plate, capacity, vechileType].some(
+        (field) => !field || field.trim() === ""
+      )
+    ) {
+      throw new ApiError(400, "All fields are required");
+    }
+  
+    // Check if Captain already exists
+    console.log("Checking if captain already exists");
+    const existedUser = await Captain.findOne({
+      $or: [{ username }, { email }],
     });
+  
+    if (existedUser) {
+      console.log("Captain already exists");
+      throw new ApiError(409, "User with email or username already exists");
+    }
+  
+    // Create new captain in the database
+    console.log("Creating new captain");
+    const newCaptain = await Captain.create({
+      fullname: {
+        firstname: fullname?.firstname || "",
+        lastname: fullname?.lastname || "",
+      },
+      email,
+      password,
+      username,
+      vechile: {
+        color,
+        plate,
+        capacity,
+        vechileType,
+      },
+    });
+  
+    // Fetch created captain and exclude sensitive fields
+    console.log("Fetching created captain");
+    const createdCaptain = await Captain.findById(newCaptain._id).select("-password -refreshToken");
+  
+    if (!createdCaptain) {
+      console.log("Error in creating captain");
+      throw new ApiError(500, "Something went wrong while registering the user");
+    }
+  
+    // Return success response
+    console.log("Returning response");
+    return res
+      .status(201)
+      .json(new ApiResponse(201, createdCaptain, "User registered successfully"));
+  });
+ 
+const loginCaptain = asyncHandler(async (req, res) => {
+    const errors = validationResult(req);
+  
+    // Handle validation errors
+    if (!errors.isEmpty()) {
+      console.log("Validation errors:", errors.array());
+      return res.status(400).json({ errors: errors.array() });
+    }
+  
+    // Destructure required fields from the request body
+    const { email, password, username } = req.body;
+  
+  
+    // Check if any required fields are empty
+    if ([ email, password, username].some(field => !field.trim())) {
+      throw new ApiError(400, "All fields are required");
+    }
+  
+    // Try to find the Captain by username or password
+    const existedCaptain = await Captain.findOne({
+      $or: [{ username }, { password }],
+    }).select('+password');
+  
+    // If Captain not found, return an error
+    if (!existedCaptain) {
+      throw new ApiError(404, "Captain not found");
+    }
+
+    console.log(existedCaptain);
+  
+    // Check if the password is correct
+    const isPasswordValid = await existedCaptain.isPasswordCorrect(password);
+    if (!isPasswordValid) {
+      throw new ApiError(401, "Invalid Password");
+    }
+  
+    // Generate access and refresh tokens
+    const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(existedCaptain._id);
+  
+    // Retrieve Captain details excluding password and refresh token
+    const loggedInCaptain = await Captain.findById(Captain._id).select("-password -refreshToken");
+  
+    // Set cookie options
+    const cookieOptions = {
+      httpOnly: true,
+      secure: true, 
+    };
+  
+    // Send response with tokens and Captain details
+    return res
+      .status(200)
+      .cookie("accessToken", accessToken, cookieOptions)
+      .cookie("refreshToken", refreshToken, cookieOptions)
+      .json(
+        new ApiResponse(
+          200,
+          {
+            user: loggedInCaptain,
+            accessToken,
+            refreshToken
+          },
+          "Captain logged in successfully"
+        )
+      );
+  });
+ 
+const logoutCaptain = asyncHandler(async (req, res) => {
+  await Captain.findByIdAndUpdate(
+    req.user._id,
+    {
+      $Unset: {
+        refreshToken: 1,
+      },
+    },
+    {
+      new: true,
+    }
+  );
+
+ 
+  const options = {
+    httpOnly: true,
+    secure: true,
+  };
+
+  return res
+    .status(200)
+    .clearCookie("accessToken", options)
+    .clearCookie("refreshToken", options)
+    .json(new ApiResponse(200, {}, "Captain Logged out successfully"));
+});
+
+const getCaptainProfile = asyncHandler(async(req,res) => { 
+  return res
+  .status(200)
+  .json(new ApiResponse(200, req.user, "current Captian fetced successfully"));
+});
+  
 
 
-export { registerCaptain }
+
+
+export { registerCaptain, loginCaptain, logoutCaptain, getCaptainProfile}
