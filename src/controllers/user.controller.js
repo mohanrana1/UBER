@@ -47,18 +47,16 @@ const registerUser = asyncHandler(async(req,res) =>{
 
 
  // 1.get user details from frontend 
- const { fullname, email, password, username } = req.body;
+ const { fullname, email, password } = req.body;
  const { firstname, lastname } = fullname || {}; // Destructure `firstname` and `lastname` safely
  
 // 2. validation of data like not empty
-    if( [fullname.firstname,username,email,password].some((field) => field.trim === "") ){
+    if( [firstname,lastname,email,password].some((field) => field.trim === "") ){
         throw new ApiError(400,"All fields are required")
     }
 
 // 3. check if user already exists (check either by username or email)
-    const existedUser = await User.findOne({
-        $or: [{username} , {email}],
-    })
+    const existedUser = await User.findOne({ email })
     
     if(existedUser){
         throw new ApiError(409, "user with this email or username already exists");
@@ -72,7 +70,7 @@ const registerUser = asyncHandler(async(req,res) =>{
         },
         email: email,
         password: password,
-        username: username.toLowerCase()
+        
     });
 
  // 5. check for user creation
@@ -104,31 +102,30 @@ const loginUser = asyncHandler(async(req,res) => {
   // 7. send the response all above operation is success
 
   //check if there is any error in the request by experss validator
+  // console.log(req)
     const errors = validationResult(req);
     if(!errors.isEmpty()){
         return new ApiError(400, "All fields are required");
     }
 
     // 1. get the user's credential from the req.body
-    const {username,email, password} = req.body;  
+    const { email, password } = req.body;  
 
     // 2. check the username or email is empty or not
-    if( [username,email,password].some((field)=> {field.trim() === ""})){
+    if( [email,password].some((field)=> {field.trim() === ""})){
         throw new ApiError(400, "All fields are required");
     }
 
     // 3. find the user
     // If you want to retrieve the password field even though it's marked as select: false, you can explicitly include it in your query:
-    const existedUser = await User.findOne({
-        $or: [{username}, {email}]
-    }).select("+password"); 
+    const existedUser = await User.findOne( {email} ).select("+password"); 
 
     if(!existedUser){
         throw new ApiError(401, "invalid email or password");
     }
 
     // 4. check the password
-    console.log(password);
+    // console.log(password);
     const isPasswordValid = await existedUser.isPasswordCorrect(password);
 
      if(!isPasswordValid){
@@ -137,10 +134,10 @@ const loginUser = asyncHandler(async(req,res) => {
 
     // 5. access the access and refresh token
     const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(existedUser._id);
-    console.log(accessToken , refreshToken);
+    // console.log(accessToken , refreshToken);
   
      // 6. remove password and refreshToken from the userdata
-  const loggedInUser = await User.findById(User._id).select(
+  const loggedInUser = await User.findById(existedUser._id).select(
     "-password -refreshToken"
   );
 
@@ -149,7 +146,8 @@ const loginUser = asyncHandler(async(req,res) => {
     // 7. send the cookies
     const options = {
         httpOnly: true, // Prevent access from JavaScript (XSS protection)
-        secure: true, // Ensures the cookie is sent only over HTTPS
+        secure: false, // Set to true in production with HTTPS
+        sameSite: "lax", // Ensures cookies are sent with same-site requests 
       };
 
 
@@ -274,10 +272,10 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
 });
 
 const updateAccountDetails = asyncHandler(async (req, res) => {
-  const { fullName, email } = req.body;
+  const { fullname, email } = req.body;
 
   // Check for missing fields
-  if (!fullName || !email) {
+  if (!fullname || !email) {
     throw new ApiError(400, "All fields are required");
   }
 
@@ -292,7 +290,7 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
     userId,
     {
       $set: {
-        fullName,
+        fullname,
         email,
       },
     },

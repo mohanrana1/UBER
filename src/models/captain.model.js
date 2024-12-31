@@ -4,11 +4,6 @@ import bcrypt from "bcrypt";
 
 const captainSchema = new Schema(
   {
-    username: {
-      type: String,
-      required: true,
-      index: true,
-    },
     fullname: {
       firstname: {
         type: String,
@@ -26,7 +21,7 @@ const captainSchema = new Schema(
       required: true,
       unique: true,
       lowercase: true,
-      match: [/\S+@\S+\.\S+/, 'is invalid'],
+      match: [/\S+@\S+\.\S+/, "is invalid"],
     },
     password: {
       type: String,
@@ -54,18 +49,16 @@ const captainSchema = new Schema(
       plate: {
         type: String,
         required: true,
-        unique: true,
         minLength: [3, "Plate should be at least 3 characters"],
       },
       capacity: {
         type: Number,
         required: true,
-        minLength: [1, "Capacity should be at least 1 character"],
       },
       vehicleType: {
         type: String,
         required: true,
-        enum: ["car", "motorcycle", "auto"],
+        enum: ["car", "moto", "auto"],
       },
     },
   },
@@ -79,18 +72,18 @@ captainSchema.pre("save", async function (next) {
   next();
 });
 
-captainSchema.methods.isPasswordCorrect = async function(password){
+captainSchema.methods.isPasswordCorrect = async function (password) {
   if (!this.password) {
-    throw new Error('No password found for this captain');
+    throw new Error("No password found for this captain");
   }
-    return await bcrypt.compare(password,this.password);
-}
+  return await bcrypt.compare(password, this.password);
+};
 
 captainSchema.methods.generateAccessToken = function () {
   return jwt.sign(
     {
       _id: this.id,
-      role: "Captain"
+      role: "Captain",
     },
     process.env.ACCESS_TOKEN_SECRET,
     {
