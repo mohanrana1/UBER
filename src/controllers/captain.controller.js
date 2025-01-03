@@ -109,17 +109,15 @@ const loginCaptain = asyncHandler(async (req, res) => {
   }
 
   // Destructure required fields from the request body
-  const { email, password, username } = req.body;
+  const { email, password} = req.body;
 
   // Check if any required fields are empty
-  if ([email, password, username].some((field) => !field.trim())) {
+  if ([email, password].some((field) => !field.trim())) {
     throw new ApiError(400, "All fields are required");
   }
 
   // Try to find the Captain by username or password
-  const existedCaptain = await Captain.findOne({
-    $or: [{ username }, { password }],
-  }).select("+password");
+  const existedCaptain = await Captain.findOne({ email }).select("+password");
 
   // If Captain not found, return an error
   if (!existedCaptain) {
